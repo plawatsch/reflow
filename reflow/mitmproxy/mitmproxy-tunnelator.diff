@@ -1,0 +1,124 @@
+commit d5a23bf392a2c55f5fead8db153918cbd7683ce3
+Author: Philip Lawatsch <philip@lawatsch.at>
+Date:   Tue Feb 10 20:34:19 2015 +0100
+
+    patch to support re/flow "transparent" proxy mode
+
+diff --git a/libmproxy/cmdline.py b/libmproxy/cmdline.py
+index bf5add3..0588de8 100644
+--- a/libmproxy/cmdline.py
++++ b/libmproxy/cmdline.py
+@@ -348,6 +348,11 @@ def common_options(parser):
+         help="Set transparent proxy mode."
+     )
+     group.add_argument(
++        "-TT", "--tunnelator",
++        action="store_true", dest="tunnelator_proxy", default=False,
++        help="Set tunnelator proxy mode."
++    )
++    group.add_argument(
+         "-U", "--upstream",
+         action="store",
+         type=parse_server_spec,
+diff --git a/libmproxy/main.py b/libmproxy/main.py
+index e5b7f56..23cfa91 100644
+--- a/libmproxy/main.py
++++ b/libmproxy/main.py
+@@ -70,7 +70,7 @@ def get_server(dummy_server, options):
+     else:
+         try:
+             return ProxyServer(options)
+-        except ProxyServerError, v:
++        except ProxyServerError as v:
+             print(str(v), file=sys.stderr)
+             sys.exit(1)
+ 
+diff --git a/libmproxy/platform/__init__.py b/libmproxy/platform/__init__.py
+index 1b2cf90..ec2f3cb 100644
+--- a/libmproxy/platform/__init__.py
++++ b/libmproxy/platform/__init__.py
+@@ -1,5 +1,5 @@
+ import sys
+-
++import tunnelator
+ resolver = None
+ 
+ if sys.platform == "linux2":
+diff --git a/libmproxy/platform/linux.py b/libmproxy/platform/linux.py
+index d5cfec9..216d9bf 100644
+--- a/libmproxy/platform/linux.py
++++ b/libmproxy/platform/linux.py
+@@ -10,3 +10,10 @@ class Resolver(object):
+         _, port, a1, a2, a3, a4 = struct.unpack("!HHBBBBxxxxxxxx", odestdata)
+         address = "%d.%d.%d.%d" % (a1, a2, a3, a4)
+         return address, port
++
++class TunnelatorResolver(object):
++    def original_addr(self, csock):
++        odestdata = csock.getsockopt(socket.SOL_IP, SO_ORIGINAL_DST, 16)
++        _, port, a1, a2, a3, a4 = struct.unpack("!HHBBBBxxxxxxxx", odestdata)
++        address = "%d.%d.%d.%d" % (a1, a2, a3, a4)
++        return address, port
+diff --git a/libmproxy/platform/tunnelator.py b/libmproxy/platform/tunnelator.py
+new file mode 100644
+index 0000000..f2f9cf2
+--- /dev/null
++++ b/libmproxy/platform/tunnelator.py
+@@ -0,0 +1,23 @@
++import socket, struct
++import pickle
++# Python socket module does not have this constant
++SO_ORIGINAL_DST = 80
++
++
++class Resolver(object):
++    def original_addr(self, csock):
++        addr, port_int = csock.getpeername()
++        r = {}
++        r["request"] = "getproxymapping"
++        r["src_address"] = addr
++        r["src_port"] = `port_int`
++        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
++        s.connect(('127.0.0.1', 13373))
++        s.send(pickle.dumps(r))
++        result = pickle.loads(s.recv(1024))
++        s.close()
++
++        if result["result"] != "ok":
++        	print "Error getting mapping!!!!!!"
++
++        return (result["address"], int(result["port"]))
+diff --git a/libmproxy/proxy/config.py b/libmproxy/proxy/config.py
+index 3d373a2..3e82754 100644
+--- a/libmproxy/proxy/config.py
++++ b/libmproxy/proxy/config.py
+@@ -65,6 +65,8 @@ class ProxyConfig:
+             self.mode = ReverseProxyMode(upstream_server)
+         elif mode == "upstream":
+             self.mode = UpstreamProxyMode(upstream_server)
++        elif mode == "tunnelator":
++            self.mode = TransparentProxyMode(platform.tunnelator.Resolver(), ssl_ports)
+         else:
+             self.mode = RegularProxyMode()
+ 
+@@ -93,6 +95,9 @@ def process_proxy_options(parser, options):
+         if not platform.resolver:
+             return parser.error("Transparent mode not supported on this platform.")
+         mode = "transparent"
++    if options.tunnelator_proxy:
++        c += 1
++        mode = "tunnelator"
+     if options.socks_proxy:
+         c += 1
+         mode = "socks5"
+diff --git a/mitmproxy b/mitmproxy
+index cd22282..94983a8 100755
+--- a/mitmproxy
++++ b/mitmproxy
+@@ -1,3 +1,3 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python2
+ from libmproxy.main import mitmproxy
+-mitmproxy()
+\ No newline at end of file
++mitmproxy()
