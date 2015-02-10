@@ -1,6 +1,6 @@
 # re/flow
 
-## WARNING, this is not for the faint of heart.
+## WARNING: this is not for the faint of heart!
 ## Some python as well as advanced networking knowledge is required to work with re/flow at the moment!
 
 This project consists of two main parts:
@@ -13,7 +13,7 @@ This project consists of two main parts:
 
 
 
-The main idea is to supply fake dns responses to some target hosts in order to redirect them to a fake / pseudo tun device which will in turn mangle the packets to allow for some fun routing / hijacking tricks.
+The main idea is to supply fake dns responses to some target hosts in order to redirect them to a fake / pseudo tun device which in turn will mangle the packets to allow for some fun routing / hijacking tricks.
 
 Config is hard coded in various places in the source code, make sure to have a look at _everything_ before you start anything!
 
@@ -50,10 +50,10 @@ Usage:
 
 Adapt the streamreceiver.py file to fit your needs (eg change the names of the monitored packages, or do something different with received data).
 
-Adapt, compile and activate the xposed module on your device.
+Change the destination ip and some other config settings in the source, compile and push the xposed module to your device.
 
 
-The example streamreceiver provided will simply run the traffic through HttpParser and print it to stdout
+The example streamreceiver provided will simply run the intercepted traffic through HttpParser and print it to stdout.
 
 
 
